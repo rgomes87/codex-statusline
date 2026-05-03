@@ -6,6 +6,8 @@ Codex does not currently expose the same native `statusLine` hook that Claude Co
 
 ## Preview
 
+![Codex statusline preview](assets/preview.svg)
+
 ```text
 ❮■■■|□□□□□□□❯ 86.5k - 33%  ⬇️ 2507.9k ⬆️ 19.9k
 GPT-5.5 · medium ∷ ~/project  🌿 main
