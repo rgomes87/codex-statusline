@@ -51,9 +51,9 @@ restore_tmux_format() {
   local value="$2"
 
   if [ -n "$value" ]; then
-    tmux set-option -g "status-format[$index]" "$value" >/dev/null 2>&1 || true
+    tmux set-option "status-format[$index]" "$value" >/dev/null 2>&1 || true
   else
-    tmux set-option -gu "status-format[$index]" >/dev/null 2>&1 || true
+    tmux set-option -u "status-format[$index]" >/dev/null 2>&1 || true
   fi
 }
 
@@ -71,10 +71,10 @@ configure_tmux_status() {
   tmux set-option window-status-separator "" >/dev/null
   tmux set-option status-left "" >/dev/null
   tmux set-option status-right "" >/dev/null
-  tmux set-option -g "status-format[0]" "#(bash $STATUS_SCRIPT --line 1)" >/dev/null
-  tmux set-option -g "status-format[1]" "#(bash $STATUS_SCRIPT --line 2)" >/dev/null
-  tmux set-option -g "status-format[2]" "#(bash $STATUS_SCRIPT --line 3)" >/dev/null
-  tmux set-option -g "status-format[3]" "#(bash $STATUS_SCRIPT --line 4)" >/dev/null
+  tmux set-option "status-format[0]" "#(bash $STATUS_SCRIPT --line 1)" >/dev/null
+  tmux set-option "status-format[1]" "#(bash $STATUS_SCRIPT --line 2)" >/dev/null
+  tmux set-option "status-format[2]" "#(bash $STATUS_SCRIPT --line 3)" >/dev/null
+  tmux set-option "status-format[3]" "#(bash $STATUS_SCRIPT --line 4)" >/dev/null
 }
 
 configure_existing_tmux_session() {
