@@ -404,51 +404,117 @@ if [ "$TOT_IN" -gt 0 ] || [ "$TOT_OUT" -gt 0 ]; then
   TOK_SEG=$(printf "⬇️ ${bold}${BLUE}${IN_FMT}${reset} ⬆️ ${bold}${MAGENTA}${OUT_FMT}${reset}")
 fi
 
-# ── Active tools (from transcript) ──────────────────────────────────────────
+# ── Transcript analysis: tools, compact count, session stats ─────────────────
 TRANSCRIPT_PATH=$(echo "$input" | jq -r '.transcript_path // empty')
 TOOLS_SEG=""
+COMPACT_NUM=0
+STATS_SEG=""
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-  TOOLS_SEG=$(python3 -c "
-import json, sys
+  _TRES=$(python3 -c "
+import json, time, re, sys
+from calendar import timegm
+
+R = '\033[0m'
+B = '\033[1m'
+D = '\033[2m'
+def c(n): return f'\033[38;5;{n}m'
+
+def tool_color(name):
+    if name.startswith('mcp__'): return c(213)
+    if name in ('Read','Write','Edit','NotebookEdit'): return c(75)
+    if name == 'Bash': return c(202)
+    if name in ('WebFetch','WebSearch'): return c(51)
+    if name in ('Agent','Plan','Explore','EnterPlanMode','ExitPlanMode',
+                'TaskCreate','TaskUpdate','TaskGet','TaskList','TaskOutput','TaskStop'): return c(135)
+    return c(250)
 
 try:
     with open('$TRANSCRIPT_PATH') as f:
         lines = [json.loads(l) for l in f if l.strip()]
-except:
-    sys.exit(0)
 
-uses = {}      # id -> name
-completed = set()
+    # --- Compact count ---
+    compact_count = sum(1 for e in lines
+                        if e.get('type') == 'system' and e.get('subtype') == 'compact_boundary')
 
-for item in lines:
-    msg = item.get('message', {})
-    content = msg.get('content', [])
-    if not isinstance(content, list):
-        continue
-    for block in content:
-        if not isinstance(block, dict):
-            continue
-        if block.get('type') == 'tool_use':
-            uses[block['id']] = block.get('name', '?')
-        elif block.get('type') == 'tool_result':
-            completed.add(block.get('tool_use_id', ''))
+    # --- Tool tracking ---
+    uses = {}
+    completed = set()
+    for item in lines:
+        if item.get('type') == 'assistant':
+            msg = item.get('message', {})
+            content = msg.get('content', [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get('type') == 'tool_use':
+                        uses[block['id']] = block.get('name', '?')
+        elif item.get('type') == 'user':
+            msg = item.get('message', {})
+            content = msg.get('content', [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get('type') == 'tool_result':
+                        completed.add(block.get('tool_use_id', ''))
 
-running = [name for tid, name in uses.items() if tid not in completed]
-done_recent = [uses[tid] for tid in list(reversed(list(uses.keys()))) if tid in completed][:5]
+    running = [name for tid, name in uses.items() if tid not in completed]
+    done_recent = [uses[tid] for tid in reversed(list(uses.keys())) if tid in completed][:5]
 
-parts = []
-for name in running:
-    parts.append(f'◐ {name}')
+    tool_parts = []
+    for name in running:
+        col = tool_color(name)
+        tool_parts.append(f'{c(208)}{B}◐{R} {B}{col}{name}{R}')
 
-counts = {}
-for name in done_recent:
-    counts[name] = counts.get(name, 0) + 1
-for name, n in counts.items():
-    parts.append(f'✓ {name}' + (f' ×{n}' if n > 1 else ''))
+    done_counts = {}
+    for name in done_recent:
+        done_counts[name] = done_counts.get(name, 0) + 1
+    for name, n in done_counts.items():
+        col = tool_color(name)
+        suffix = f' {D}×{n}{R}' if n > 1 else ''
+        tool_parts.append(f'{c(82)}✓{R} {D}{col}{name}{R}{suffix}')
 
-if parts:
-    print('  '.join(parts))
+    tools_line = '  '.join(tool_parts)
+
+    # --- Session stats ---
+    turns = sum(1 for e in lines if e.get('type') == 'assistant')
+
+    timestamps = []
+    for e in lines:
+        ts_str = e.get('timestamp', '')
+        if ts_str:
+            m = re.match(r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})', ts_str)
+            if m:
+                g = [int(x) for x in m.groups()]
+                timestamps.append(timegm((g[0], g[1], g[2], g[3], g[4], g[5], 0, 0, 0)))
+
+    stats_line = ''
+    if turns > 0 and timestamps:
+        elapsed = max(0, int(time.time()) - min(timestamps))
+        h  = elapsed // 3600
+        mi = (elapsed % 3600) // 60
+        sr = elapsed % 60
+        if h > 0:
+            dur = f'{h}h {mi}m' if mi > 0 else f'{h}h'
+        else:
+            dur = f'{mi}m {sr}s' if mi > 0 else f'{sr}s'
+        stats_line = f'🗒 {c(75)}{B}{turns}{R}{D} turns{R}  ·  {c(73)}{B}{dur}{R}'
+
+    print(compact_count)
+    print(stats_line)
+    print(tools_line)
+
+except Exception:
+    print(0)
+    print('')
+    print('')
 " 2>/dev/null)
+  COMPACT_NUM=$(printf "%s" "$_TRES" | sed -n '1p')
+  STATS_SEG=$(printf "%s" "$_TRES" | sed -n '2p')
+  TOOLS_SEG=$(printf "%s" "$_TRES" | sed -n '3p')
+fi
+
+# Build compact segment from count
+COMPACT_SEG=""
+if [ -n "$COMPACT_NUM" ] && [ "$COMPACT_NUM" -gt 0 ] 2>/dev/null; then
+  COMPACT_SEG=$(printf "${bold}${GOLD}♻ ${COMPACT_NUM}${reset}")
 fi
 
 # ── Prompt cache ─────────────────────────────────────────────────────────────
@@ -457,14 +523,30 @@ CACHE_READ=$(echo "$input"   | jq -r '.context_window.current_usage.cache_read_i
 CACHE_SEG=""
 if [ "${CACHE_CREATE:-0}" -gt 0 ] || [ "${CACHE_READ:-0}" -gt 0 ]; then
   CACHE_SEG=$(python3 -c "
+R = '\033[0m'
+B = '\033[1m'
+D = '\033[2m'
+def c(n): return f'\033[38;5;{n}m'
+
 create = int('${CACHE_CREATE:-0}')
 read   = int('${CACHE_READ:-0}')
+
 def fmt(n):
     return f'{round(n/1000)}k' if n >= 1000 else str(n)
+
 total = create + read
 hit = round(read / total * 100) if total > 0 else 0
-parts = [f'read {fmt(read)}', f'created {fmt(create)}', f'hit {hit}%']
-print('💾 ' + '  ·  '.join(parts))
+
+if hit >= 80:   hit_col = c(82)
+elif hit >= 50: hit_col = c(220)
+else:           hit_col = c(196)
+
+sep        = f'{D} · {R}'
+read_seg   = f'{c(82)}{B}read {fmt(read)}{R}'
+create_seg = f'{c(75)}{B}created {fmt(create)}{R}'
+hit_seg    = f'{D}hit {R}{hit_col}{B}{hit}%{R}'
+
+print('💾 ' + sep.join([read_seg, create_seg, hit_seg]))
 " 2>/dev/null)
 fi
 
@@ -474,10 +556,10 @@ SEP=$(printf "${GREY} │ ${reset}")
 SEP2=$(printf " $(c 238)∷${reset} ")
 
 # ── Assemble line bodies (no labels) ─────────────────────────────────────────
-# Line 1 — context bar + token counts
-# Bracket colour reflects current effort bucket (matches bar + percentage)
+# Line 1 — context bar + token counts + compact counter
 LINE1="${bold}${PCT_COL}❮${reset}${BAR_COLORED}${bold}${PCT_COL}❯${reset} ${PCT_COLORED}"
-[ -n "$TOK_SEG" ] && LINE1="${LINE1}  ${TOK_SEG}"
+[ -n "$TOK_SEG" ]     && LINE1="${LINE1}  ${TOK_SEG}"
+[ -n "$COMPACT_SEG" ] && LINE1="${LINE1}  ${COMPACT_SEG}"
 
 # Line 2 — model · effort  ⟫  directory  ⎇ branch
 LOC_SEG="${CWD_SEG}"
@@ -496,9 +578,12 @@ LINE5="${TOOLS_SEG}"
 # Line 6 — prompt cache (only when present)
 LINE6="${CACHE_SEG}"
 
+# Line 7 — session stats (only when present)
+LINE7="${STATS_SEG}"
+
 # Build output — only emit lines that have content
 OUT=""
-for L in "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6"; do
+for L in "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6" "$LINE7"; do
   [ -n "$L" ] && OUT="${OUT}${L}\n"
 done
 printf "%b" "$OUT"
