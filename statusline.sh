@@ -5,8 +5,9 @@ input=$(cat)
 reset='\033[0m'
 dim='\033[2m'
 
-# 256-colour foreground
+# 256-colour foreground / background
 c()  { printf '\033[38;5;%sm' "$1"; }
+bg() { printf '\033[48;5;%sm' "$1"; }
 
 # Palette
 CYAN=$(c 51)
@@ -113,14 +114,10 @@ case "$MODEL" in
   *)            MODEL_COL=$CYAN  ;;
 esac
 
-VOICE_ENABLED=$(jq -r '.voice.enabled // false' ~/.claude/settings.json 2>/dev/null)
-VOICE_SEG=""
-[ "$VOICE_ENABLED" = "true" ] && VOICE_SEG=" $(c 213)🎙${reset}"
-
 if [ -n "$EFFORT" ]; then
-  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}${VOICE_SEG}")
+  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}")
 else
-  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}${VOICE_SEG}")
+  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}")
 fi
 
 # ── Context bar ─────────────────────────────────────────────────────────────
@@ -136,11 +133,7 @@ SEP_CELL=$(( 100000 * BAR_WIDTH / MAX_WIN ))
 SHOW_SEP=0
 [ "$SEP_CELL" -gt 0 ] && [ "$SEP_CELL" -lt "$BAR_WIDTH" ] && SHOW_SEP=1
 
-# Autocompact threshold tick inside the bar (cell after which ⚡ is injected)
 AC_THRESH="${CLAUDE_AUTOCOMPACT_PCT_OVERRIDE:-91}"
-AC_CELL=$(( AC_THRESH * BAR_WIDTH / 100 ))
-SHOW_AC=0
-[ "$AC_CELL" -gt 0 ] && [ "$AC_CELL" -lt "$BAR_WIDTH" ] && SHOW_AC=1
 
 # Separator color: white when under 100K, amber once past
 if [ "$CTX_TOKS" -ge 100000 ]; then
@@ -166,10 +159,7 @@ for i in $(seq 1 $BAR_WIDTH); do
   if [ "$SHOW_SEP" -eq 1 ] && [ "$i" -eq "$((SEP_CELL + 1))" ]; then
     BAR_COLORED="${BAR_COLORED}${SEP_COL}|${reset}"
   fi
-  # Inject ⚡ autocompact threshold tick
-  if [ "$SHOW_AC" -eq 1 ] && [ "$i" -eq "$((AC_CELL + 1))" ]; then
-    BAR_COLORED="${BAR_COLORED}$(c 51)⚡${reset}"
-  fi
+
   if [ "$i" -le "$FILLED" ]; then
     case "$i" in
       1)  COL=$(c 46)  ;;
@@ -218,16 +208,16 @@ if [ -n "$FIVE_H" ]; then
   FH_USED=$(printf '%.0f' "$FIVE_H")
   FH_INT=$((100 - FH_USED))
   FH_FILLED=$((FH_INT * 10 / 100))
+  case "$FH_FILLED" in
+    10) FH_BAR_COL=$(c 46)  ;; 9) FH_BAR_COL=$(c 82)  ;; 8) FH_BAR_COL=$(c 118) ;;
+    7)  FH_BAR_COL=$(c 154) ;; 6) FH_BAR_COL=$(c 190) ;; 5) FH_BAR_COL=$(c 226) ;;
+    4)  FH_BAR_COL=$(c 220) ;; 3) FH_BAR_COL=$(c 214) ;; 2) FH_BAR_COL=$(c 202) ;;
+    *)  FH_BAR_COL=$(c 196) ;;
+  esac
   FH_BAR=""
   for _i in $(seq 1 10); do
     if [ "$_i" -le "$FH_FILLED" ]; then
-      case "$_i" in
-        10) _C=$(c 46)  ;; 9) _C=$(c 82)  ;; 8) _C=$(c 118) ;;
-        7)  _C=$(c 154) ;; 6) _C=$(c 190) ;; 5) _C=$(c 226) ;;
-        4)  _C=$(c 220) ;; 3) _C=$(c 214) ;; 2) _C=$(c 202) ;;
-        *)  _C=$(c 196) ;;
-      esac
-      FH_BAR="${FH_BAR}${_C}▮${reset}"
+      FH_BAR="${FH_BAR}${FH_BAR_COL}▮${reset}"
     else
       FH_BAR="${FH_BAR}${GREY}▯${reset}"
     fi
@@ -301,16 +291,16 @@ if [ -n "$SEVEN_D" ]; then
   SD_USED=$(printf '%.0f' "$SEVEN_D")
   SD_INT=$((100 - SD_USED))
   SD_FILLED=$((SD_INT * 10 / 100))
+  case "$SD_FILLED" in
+    10) SD_BAR_COL=$(c 46)  ;; 9) SD_BAR_COL=$(c 82)  ;; 8) SD_BAR_COL=$(c 118) ;;
+    7)  SD_BAR_COL=$(c 154) ;; 6) SD_BAR_COL=$(c 190) ;; 5) SD_BAR_COL=$(c 226) ;;
+    4)  SD_BAR_COL=$(c 220) ;; 3) SD_BAR_COL=$(c 214) ;; 2) SD_BAR_COL=$(c 202) ;;
+    *)  SD_BAR_COL=$(c 196) ;;
+  esac
   SD_BAR=""
   for _i in $(seq 1 10); do
     if [ "$_i" -le "$SD_FILLED" ]; then
-      case "$_i" in
-        10) _C=$(c 46)  ;; 9) _C=$(c 82)  ;; 8) _C=$(c 118) ;;
-        7)  _C=$(c 154) ;; 6) _C=$(c 190) ;; 5) _C=$(c 226) ;;
-        4)  _C=$(c 220) ;; 3) _C=$(c 214) ;; 2) _C=$(c 202) ;;
-        *)  _C=$(c 196) ;;
-      esac
-      SD_BAR="${SD_BAR}${_C}▮${reset}"
+      SD_BAR="${SD_BAR}${SD_BAR_COL}▮${reset}"
     else
       SD_BAR="${SD_BAR}${GREY}▯${reset}"
     fi
@@ -508,7 +498,7 @@ try:
         else:
             dur = f'{mi}m {sr}s' if mi > 0 else f'{sr}s'
         sep_d      = f'{D} · {R}'
-        stats_line = f'🗒  {c(75)}{turns}{R}{sep_d}{c(73)}{dur}{R}'
+        stats_line = f'🗒  {c(75)}{turns}{R}{sep_d}⏳{c(73)}{dur}{R}'
 
     print(compact_count)
     print(stats_line)
@@ -560,6 +550,48 @@ print(sep.join([read_seg, create_seg, hit_seg]))
 " 2>/dev/null)
 fi
 
+# ── Config context (line 7) ──────────────────────────────────────────────────
+# CLAUDE.md files: walk from cwd up to $HOME
+CLAUDEMD_COUNT=0
+_dir="$RAW_CWD"
+while true; do
+  [ -f "$_dir/CLAUDE.md" ] && CLAUDEMD_COUNT=$(( CLAUDEMD_COUNT + 1 ))
+  [ "$_dir" = "$HOME" ] && break
+  _parent="${_dir%/*}"
+  [ "$_parent" = "$_dir" ] && break
+  _dir="$_parent"
+done
+
+# Hooks, MCPs, rules — from settings.json
+_SDATA=$(python3 -c "
+import json, os
+try:
+    with open(os.path.expanduser('~/.claude/settings.json')) as f:
+        s = json.load(f)
+    # Hooks
+    hooks = sum(len(g.get('hooks',[])) for ev in s.get('hooks',{}).values() for g in ev)
+    # MCPs: try mcpServers first, fall back to counting unique mcp__ prefixes in allow list
+    mcp = len(s.get('mcpServers', {}))
+    if mcp == 0:
+        prefixes = {r.split('__')[1] for r in s.get('permissions',{}).get('allow',[])
+                    if r.startswith('mcp__') and len(r.split('__')) >= 2}
+        mcp = len(prefixes)
+    rules = len(s.get('permissions',{}).get('allow',[]))
+    voice = str(s.get('voice',{}).get('enabled', False)).lower()
+    print(hooks, mcp, rules, voice)
+except:
+    print(0, 0, 0, 'false')
+" 2>/dev/null)
+HOOK_COUNT=$(echo "$_SDATA" | awk '{print $1}')
+MCP_COUNT=$(echo  "$_SDATA" | awk '{print $2}')
+RULE_COUNT=$(echo "$_SDATA" | awk '{print $3}')
+VOICE_ON=$(echo   "$_SDATA" | awk '{print $4}')
+
+_s7=$(printf "${GREY} · ${reset}")
+_MIC_SEG=""
+[ "$VOICE_ON" = "true" ] && _MIC_SEG="${_s7}🎙"
+CTX7="$(c 204)📋 ${CLAUDEMD_COUNT}${reset}${_s7}$(c 75)🔌 ${MCP_COUNT}${reset}${_s7}$(c 214)🪝 ${HOOK_COUNT}${reset}${_s7}$(c 250)⚙️  ${RULE_COUNT}${reset}${_MIC_SEG}"
+
 # ── Separators ───────────────────────────────────────────────────────────────
 SEP=$(printf "${GREY} │ ${reset}")
 # Chevron-style separator used between model·effort and location on line 2
@@ -593,9 +625,15 @@ elif [ -n "$STATS_SEG" ]; then
   LINE6="${STATS_SEG}"
 fi
 
+# Line 7 — config context: voice · claude.md · mcp · hooks · rules
+LINE7="${CTX7}"
+
+# Line 8 — hint
+LINE8="$(printf "${dim}$(c 242)/statusline-help${reset}")"
+
 # Build output — only emit lines that have content
 OUT=""
-for L in "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6"; do
+for L in "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6" "$LINE7" "$LINE8"; do
   [ -n "$L" ] && OUT="${OUT}${L}\n"
 done
 printf "%b" "$OUT"
