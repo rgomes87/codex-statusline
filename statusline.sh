@@ -3,32 +3,39 @@ input=$(cat)
 
 # ── ANSI helpers ────────────────────────────────────────────────────────────
 reset='\033[0m'
-bold='\033[1m'
 dim='\033[2m'
 
 # 256-colour foreground
 c()  { printf '\033[38;5;%sm' "$1"; }
-# 256-colour background
-bg() { printf '\033[48;5;%sm' "$1"; }
 
 # Palette
 CYAN=$(c 51)
-MAGENTA=$(c 213)
-WHITE=$(c 255)
-YELLOW=$(c 220)
 ORANGE=$(c 208)
 RED=$(c 196)
 GREEN=$(c 82)
-BLUE=$(c 75)
 GREY=$(c 240)
 SILVER=$(c 250)
 GOLD=$(c 214)
-PURPLE=$(c 135)
 
 # ── Visible-length helper (strips ANSI escape codes) ─────────────────────────
 
+# ── Parse all JSON fields in one jq call ─────────────────────────────────────
+eval "$(echo "$input" | jq -r '
+  "RAW_CWD="        + (.workspace.current_dir // .cwd // "" | @sh),
+  "MODEL="          + (.model.display_name // "" | @sh),
+  "EFFORT="         + (.effort.level // "" | @sh),
+  "PCT_RAW="        + (.context_window.used_percentage // 0 | tostring),
+  "MAX_WIN="        + (.context_window.context_window_size // 200000 | tostring),
+  "FIVE_H="         + (.rate_limits.five_hour.used_percentage // "" | tostring),
+  "SEVEN_D="        + (.rate_limits.seven_day.used_percentage // "" | tostring),
+  "FIVE_H_RESET="   + (.rate_limits.five_hour.resets_at // "" | tostring),
+  "SEVEN_D_RESET="  + (.rate_limits.seven_day.resets_at // "" | tostring),
+  "CACHE_CREATE="   + (.context_window.current_usage.cache_creation_input_tokens // 0 | tostring),
+  "CACHE_READ="     + (.context_window.current_usage.cache_read_input_tokens // 0 | tostring),
+  "TRANSCRIPT_PATH="+ (.transcript_path // "" | @sh)
+' 2>/dev/null)"
+
 # ── Working directory ─────────────────────────────────────────────────────────
-RAW_CWD=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 # Fall back to shell cwd if JSON gave us nothing
 [ -z "$RAW_CWD" ] && RAW_CWD=$(pwd)
 
@@ -57,8 +64,10 @@ if [ -n "$GIT_BRANCH" ]; then
   # Staged vs unstaged (separate counts, not combined)
   STAGED=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
   UNSTAGED=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" diff --name-only 2>/dev/null | wc -l | tr -d ' ')
-  [ "${STAGED:-0}" -gt 0 ]   && GIT_SEG="${GIT_SEG} $(c 82)⊕${STAGED}${reset}"
-  [ "${UNSTAGED:-0}" -gt 0 ] && GIT_SEG="${GIT_SEG} $(c 208)✎${UNSTAGED}${reset}"
+  UNTRACKED=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' ')
+  [ "${STAGED:-0}" -gt 0 ]    && GIT_SEG="${GIT_SEG} $(c 82)⊕${STAGED}${reset}"
+  [ "${UNSTAGED:-0}" -gt 0 ]  && GIT_SEG="${GIT_SEG} $(c 208)✎${UNSTAGED}${reset}"
+  [ "${UNTRACKED:-0}" -gt 0 ] && GIT_SEG="${GIT_SEG} ${GREY}?${UNTRACKED}${reset}"
 
   # Ahead/behind remote
   UPSTREAM=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" rev-parse --abbrev-ref "@{u}" 2>/dev/null)
@@ -71,8 +80,6 @@ if [ -n "$GIT_BRANCH" ]; then
 fi
 
 # ── Model name ───────────────────────────────────────────────────────────────
-MODEL=$(echo "$input" | jq -r '.model.display_name')
-EFFORT=$(echo "$input" | jq -r '.effort.level // empty' 2>/dev/null)
 [ -z "$EFFORT" ] && EFFORT=$(jq -r '.effortLevel // empty' ~/.claude/settings.json 2>/dev/null)
 
 # Effort label colour — matches /effort UI colours:
@@ -106,41 +113,34 @@ case "$MODEL" in
   *)            MODEL_COL=$CYAN  ;;
 esac
 
+VOICE_ENABLED=$(jq -r '.voice.enabled // false' ~/.claude/settings.json 2>/dev/null)
+VOICE_SEG=""
+[ "$VOICE_ENABLED" = "true" ] && VOICE_SEG=" $(c 213)🎙${reset}"
+
 if [ -n "$EFFORT" ]; then
-  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}")
+  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}${VOICE_SEG}")
 else
-  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}")
+  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}${VOICE_SEG}")
 fi
 
-# ── Token reads (needed before context bar) ──────────────────────────────────
-TOT_IN=$(echo "$input"  | jq -r '.context_window.total_input_tokens  // 0')
-TOT_OUT=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
-
-fmt_tok() {
-  python3 -c "
-n=float('$1')
-print(f'{int(round(n/1000))}k' if n >= 1000 else str(int(n)))
-" 2>/dev/null || echo "$1"
-}
-
 # ── Context bar ─────────────────────────────────────────────────────────────
-PCT_RAW=$(echo "$input" | jq -r '.context_window.used_percentage // 0')
+[ -z "$MAX_WIN" ] || [ "$MAX_WIN" -eq 0 ] 2>/dev/null && MAX_WIN=200000
 PCT=$(printf '%.0f' "$PCT_RAW")
 
 BAR_WIDTH=10
 FILLED=$((PCT * BAR_WIDTH / 100))
 
-# Max window: try JSON field first, fall back to 200K (all current Claude models)
-MAX_WIN=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
-[ -z "$MAX_WIN" ] || [ "$MAX_WIN" -eq 0 ] 2>/dev/null && MAX_WIN=200000
-
-# Actual context tokens in use (used % × window size)
-CTX_TOKS=$(python3 -c "print(int($PCT_RAW * $MAX_WIN / 100))" 2>/dev/null || echo 0)
-
-# 100K separator: cell boundary index (separator appears after this cell)
-SEP_CELL=$(python3 -c "print(int(100000 / $MAX_WIN * $BAR_WIDTH))" 2>/dev/null || echo 5)
+# Actual tokens, 100K separator, and autocompact tick — pure bash arithmetic
+CTX_TOKS=$(( PCT * MAX_WIN / 100 ))
+SEP_CELL=$(( 100000 * BAR_WIDTH / MAX_WIN ))
 SHOW_SEP=0
 [ "$SEP_CELL" -gt 0 ] && [ "$SEP_CELL" -lt "$BAR_WIDTH" ] && SHOW_SEP=1
+
+# Autocompact threshold tick inside the bar (cell after which ⚡ is injected)
+AC_THRESH="${CLAUDE_AUTOCOMPACT_PCT_OVERRIDE:-91}"
+AC_CELL=$(( AC_THRESH * BAR_WIDTH / 100 ))
+SHOW_AC=0
+[ "$AC_CELL" -gt 0 ] && [ "$AC_CELL" -lt "$BAR_WIDTH" ] && SHOW_AC=1
 
 # Separator color: white when under 100K, amber once past
 if [ "$CTX_TOKS" -ge 100000 ]; then
@@ -162,9 +162,13 @@ fi
 #   cell 10  → 90–100%  pure red        (c 196, #ff0000)  ← complete red
 BAR_COLORED=""
 for i in $(seq 1 $BAR_WIDTH); do
-  # Inject 100K separator before cell SEP_CELL+1 (i.e., after cell SEP_CELL)
+  # Inject 100K separator before cell SEP_CELL+1
   if [ "$SHOW_SEP" -eq 1 ] && [ "$i" -eq "$((SEP_CELL + 1))" ]; then
     BAR_COLORED="${BAR_COLORED}${SEP_COL}|${reset}"
+  fi
+  # Inject ⚡ autocompact threshold tick
+  if [ "$SHOW_AC" -eq 1 ] && [ "$i" -eq "$((AC_CELL + 1))" ]; then
+    BAR_COLORED="${BAR_COLORED}$(c 51)⚡${reset}"
   fi
   if [ "$i" -le "$FILLED" ]; then
     case "$i" in
@@ -200,57 +204,30 @@ case "$FILLED" in
   10) PCT_COL=$(c 196) ;;
   *)  PCT_COL=$(c 46)  ;;
 esac
-CTX_TOK_FMT=$(fmt_tok "$CTX_TOKS")
+if [ "$CTX_TOKS" -ge 1000 ]; then
+  CTX_TOK_FMT="$(( (CTX_TOKS + 500) / 1000 ))k"
+else
+  CTX_TOK_FMT="$CTX_TOKS"
+fi
 PCT_COLORED=$(printf "${PCT_COL}${CTX_TOK_FMT} - %d%%${reset}" "$PCT")
 
 # ── Rate limits ──────────────────────────────────────────────────────────────
-FIVE_H=$(echo "$input"  | jq -r '.rate_limits.five_hour.used_percentage  // empty')
-SEVEN_D=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage  // empty')
-
-# Mini bar helper: draws a 10-cell filled/empty bar
-rate_bar() {
-  local pct="$1"
-  local width=10
-  local filled=$((pct * width / 100))
-  local bar=""
-  local col
-  if   [ "$pct" -lt 50 ]; then col=$(c 82)    # green
-  elif [ "$pct" -lt 75 ]; then col=$(c 220)   # yellow
-  else                          col=$(c 208)   # amber/orange
-  fi
-  for i in $(seq 1 $width); do
-    if [ "$i" -le "$filled" ]; then
-      bar="${bar}${col}▪${reset}"
-    else
-      bar="${bar}${GREY}·${reset}"
-    fi
-  done
-  printf "%s" "$bar"
-}
 
 RATE_STR=""
 if [ -n "$FIVE_H" ]; then
   FH_USED=$(printf '%.0f' "$FIVE_H")
   FH_INT=$((100 - FH_USED))
   FH_FILLED=$((FH_INT * 10 / 100))
-  # Inverted gradient: cell 1=red (danger) … cell 10=green (healthy)
-  # Uniform colour across all filled cells; 10-step gradient keyed to fill level
-  case "$FH_FILLED" in
-    10) FH_BAR_COL=$(c 46)  ;;
-    9)  FH_BAR_COL=$(c 82)  ;;
-    8)  FH_BAR_COL=$(c 118) ;;
-    7)  FH_BAR_COL=$(c 154) ;;
-    6)  FH_BAR_COL=$(c 190) ;;
-    5)  FH_BAR_COL=$(c 226) ;;
-    4)  FH_BAR_COL=$(c 220) ;;
-    3)  FH_BAR_COL=$(c 214) ;;
-    2)  FH_BAR_COL=$(c 202) ;;
-    *)  FH_BAR_COL=$(c 196) ;;
-  esac
   FH_BAR=""
   for _i in $(seq 1 10); do
     if [ "$_i" -le "$FH_FILLED" ]; then
-      FH_BAR="${FH_BAR}${FH_BAR_COL}▮${reset}"
+      case "$_i" in
+        10) _C=$(c 46)  ;; 9) _C=$(c 82)  ;; 8) _C=$(c 118) ;;
+        7)  _C=$(c 154) ;; 6) _C=$(c 190) ;; 5) _C=$(c 226) ;;
+        4)  _C=$(c 220) ;; 3) _C=$(c 214) ;; 2) _C=$(c 202) ;;
+        *)  _C=$(c 196) ;;
+      esac
+      FH_BAR="${FH_BAR}${_C}▮${reset}"
     else
       FH_BAR="${FH_BAR}${GREY}▯${reset}"
     fi
@@ -294,14 +271,15 @@ if diff > 0:
     m = (diff % 3600) // 60
     s = diff % 60
     if d > 0:
-        print(f'{d}d {h}h {m}m {s}s')
+        print(f'{d}d {h}h {m}m')
+    elif h > 0:
+        print(f'{h}h {m}m' if m > 0 else f'{h}h')
     else:
-        print(f'{h}h {m}m {s}s')
+        print(f'{m}m {s}s' if m > 0 else f'{s}s')
 " 2>/dev/null
 }
 
 # Attach 5h reset inline to 5h segment
-FIVE_H_RESET=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
 RATE_STR=""
 if [ -n "$FH_SEG" ]; then
   RATE_STR="$FH_SEG"
@@ -319,29 +297,20 @@ if [ -n "$FH_SEG" ]; then
 fi
 
 # Build 7d segment and attach its reset inline
-SEVEN_D_RESET=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
 if [ -n "$SEVEN_D" ]; then
   SD_USED=$(printf '%.0f' "$SEVEN_D")
   SD_INT=$((100 - SD_USED))
   SD_FILLED=$((SD_INT * 10 / 100))
-  # Inverted gradient: cell 1=red (danger) … cell 10=green (healthy)
-  # Uniform colour across all filled cells; 10-step gradient keyed to fill level
-  case "$SD_FILLED" in
-    10) SD_BAR_COL=$(c 46)  ;;
-    9)  SD_BAR_COL=$(c 82)  ;;
-    8)  SD_BAR_COL=$(c 118) ;;
-    7)  SD_BAR_COL=$(c 154) ;;
-    6)  SD_BAR_COL=$(c 190) ;;
-    5)  SD_BAR_COL=$(c 226) ;;
-    4)  SD_BAR_COL=$(c 220) ;;
-    3)  SD_BAR_COL=$(c 214) ;;
-    2)  SD_BAR_COL=$(c 202) ;;
-    *)  SD_BAR_COL=$(c 196) ;;
-  esac
   SD_BAR=""
   for _i in $(seq 1 10); do
     if [ "$_i" -le "$SD_FILLED" ]; then
-      SD_BAR="${SD_BAR}${SD_BAR_COL}▮${reset}"
+      case "$_i" in
+        10) _C=$(c 46)  ;; 9) _C=$(c 82)  ;; 8) _C=$(c 118) ;;
+        7)  _C=$(c 154) ;; 6) _C=$(c 190) ;; 5) _C=$(c 226) ;;
+        4)  _C=$(c 220) ;; 3) _C=$(c 214) ;; 2) _C=$(c 202) ;;
+        *)  _C=$(c 196) ;;
+      esac
+      SD_BAR="${SD_BAR}${_C}▮${reset}"
     else
       SD_BAR="${SD_BAR}${GREY}▯${reset}"
     fi
@@ -396,7 +365,6 @@ print(datetime.datetime.fromtimestamp(ts).strftime('%H:%M') + ' ' + label)
 fi
 
 # ── Autocompact marker ────────────────────────────────────────────────────────
-AC_THRESH="${CLAUDE_AUTOCOMPACT_PCT_OVERRIDE:-91}"
 AC_REM=$((AC_THRESH - PCT))
 if   [ "$AC_REM" -le 0  ]; then AC_COL=$(c 196)
 elif [ "$AC_REM" -le 10 ]; then AC_COL=$(c 196)
@@ -410,7 +378,6 @@ else
 fi
 
 # ── Transcript analysis: tools, compact count, session stats ─────────────────
-TRANSCRIPT_PATH=$(echo "$input" | jq -r '.transcript_path // empty')
 TOOLS_SEG=""
 STATS_SEG=""
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
@@ -422,6 +389,12 @@ R = '\033[0m'
 B = '\033[1m'
 D = '\033[2m'
 def c(n): return f'\033[38;5;{n}m'
+
+def short_name(name):
+    if name.startswith('mcp__'):
+        parts = name.split('__')
+        return parts[-1] if parts[-1] else name
+    return name
 
 def tool_color(name):
     if name.startswith('mcp__'): return c(213)
@@ -462,18 +435,53 @@ try:
     running = [name for tid, name in uses.items() if tid not in completed]
     done_recent = [uses[tid] for tid in reversed(list(uses.keys())) if tid in completed][:5]
 
+    # Build tool timestamps map: tool_use_id -> (start_ts, end_ts)
+    tool_start = {}  # tool_use_id -> timestamp of assistant message containing tool_use
+    tool_end   = {}  # tool_use_id -> timestamp of user message containing tool_result
+    for item in lines:
+        ts_str = item.get('timestamp', '')
+        ts = None
+        if ts_str:
+            m = re.match(r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})', ts_str)
+            if m:
+                g = [int(x) for x in m.groups()]
+                ts = timegm((g[0],g[1],g[2],g[3],g[4],g[5],0,0,0))
+        if item.get('type') == 'assistant' and ts:
+            msg = item.get('message', {})
+            for block in (msg.get('content') or []):
+                if isinstance(block, dict) and block.get('type') == 'tool_use':
+                    tool_start[block['id']] = ts
+        elif item.get('type') == 'user' and ts:
+            msg = item.get('message', {})
+            for block in (msg.get('content') or []):
+                if isinstance(block, dict) and block.get('type') == 'tool_result':
+                    tool_end[block.get('tool_use_id','')] = ts
+
     tool_parts = []
     for name in running:
         col = tool_color(name)
-        tool_parts.append(f'{c(208)}{B}◐{R} {B}{col}{name}{R}')
+        tool_parts.append(f'{c(208)}{B}◐{R} {B}{col}{short_name(name)}{R}')
 
     done_counts = {}
+    done_elapsed = {}  # name -> most recent elapsed seconds
     for name in done_recent:
         done_counts[name] = done_counts.get(name, 0) + 1
+    # Find elapsed for the most recent occurrence of each tool
+    for tid in reversed(list(uses.keys())):
+        if tid in completed:
+            name = uses[tid]
+            if name not in done_elapsed and tid in tool_start and tid in tool_end:
+                done_elapsed[name] = tool_end[tid] - tool_start[tid]
+
     for name, n in done_counts.items():
         col = tool_color(name)
         suffix = f' {D}×{n}{R}' if n > 1 else ''
-        tool_parts.append(f'{c(82)}✓{R} {D}{col}{name}{R}{suffix}')
+        elapsed = done_elapsed.get(name)
+        if elapsed is not None and elapsed >= 1:
+            elapsed_str = f' {D}{elapsed}s{R}'
+        else:
+            elapsed_str = ''
+        tool_parts.append(f'{c(82)}✓{R} {D}{col}{short_name(name)}{R}{suffix}{elapsed_str}')
 
     tools_line = '  '.join(tool_parts)
 
@@ -522,8 +530,6 @@ if [ -n "$COMPACT_NUM" ] && [ "$COMPACT_NUM" -gt 0 ] 2>/dev/null; then
 fi
 
 # ── Prompt cache ─────────────────────────────────────────────────────────────
-CACHE_CREATE=$(echo "$input" | jq -r '.context_window.current_usage.cache_creation_input_tokens // 0')
-CACHE_READ=$(echo "$input"   | jq -r '.context_window.current_usage.cache_read_input_tokens    // 0')
 CACHE_SEG=""
 if [ "${CACHE_CREATE:-0}" -gt 0 ] || [ "${CACHE_READ:-0}" -gt 0 ]; then
   CACHE_SEG=$(python3 -c "
@@ -547,7 +553,7 @@ else:           hit_col = c(196)
 
 sep        = f'{D} · {R}'
 read_seg   = f'📖 {c(82)}read {fmt(read)}{R}'
-create_seg = f'✍️  {c(75)}wrote {fmt(create)}{R}'
+create_seg = f'✏️ {c(75)}wrote {fmt(create)}{R}'
 hit_seg    = f'🎯 {hit_col}hit {hit}%{R}'
 
 print(sep.join([read_seg, create_seg, hit_seg]))
