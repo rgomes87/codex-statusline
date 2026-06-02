@@ -371,7 +371,20 @@ if [ -n "$SEVEN_D" ]; then
   SD_SEG=$(printf "${SD_ICON} ${bold}$(c 250)7d${reset} ${SD_BAR} ${bold}${SD_COL}${SD_INT}%%${reset}")
   if [ -n "$SEVEN_D_RESET" ]; then
     R=$(fmt_reset "$SEVEN_D_RESET")
-    RESET_TIME_7D=$(date -r "$SEVEN_D_RESET" '+%H:%M %a' 2>/dev/null)
+    RESET_TIME_7D=$(python3 -c "
+import time, datetime
+ts = int($SEVEN_D_RESET)
+reset_date = datetime.date.fromtimestamp(ts)
+today = datetime.date.today()
+delta = (reset_date - today).days
+if delta == 0:
+    label = 'today'
+elif delta == 1:
+    label = 'tomorrow'
+else:
+    label = reset_date.strftime('%a')
+print(datetime.datetime.fromtimestamp(ts).strftime('%H:%M') + ' ' + label)
+" 2>/dev/null)
     if [ -n "$R" ]; then
       if [ -n "$RESET_TIME_7D" ]; then
         SD_SEG="${SD_SEG} ⏱️${bold}${MUTED_CYAN}${R}${reset} ${GREY}@ ${RESET_TIME_7D}${reset}"
