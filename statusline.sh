@@ -54,11 +54,11 @@ GIT_SEG=""
 if [ -n "$GIT_BRANCH" ]; then
   GIT_SEG=$(printf "🌿 ${bold}$(c 117)${GIT_BRANCH}${reset}")
 
-  # Dirty: count staged + unstaged changed files (not untracked)
-  DIRTY=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" status --porcelain 2>/dev/null | grep -c '^[^?]')
-  if [ "$DIRTY" -gt 0 ]; then
-    GIT_SEG="${GIT_SEG} ${bold}$(c 208)✎${DIRTY}${reset}"
-  fi
+  # Staged vs unstaged (separate counts, not combined)
+  STAGED=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+  UNSTAGED=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" diff --name-only 2>/dev/null | wc -l | tr -d ' ')
+  [ "${STAGED:-0}" -gt 0 ]   && GIT_SEG="${GIT_SEG} ${bold}$(c 82)⊕${STAGED}${reset}"
+  [ "${UNSTAGED:-0}" -gt 0 ] && GIT_SEG="${GIT_SEG} ${bold}$(c 208)✎${UNSTAGED}${reset}"
 
   # Ahead/behind remote
   UPSTREAM=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" rev-parse --abbrev-ref "@{u}" 2>/dev/null)
@@ -135,7 +135,7 @@ MAX_WIN=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 [ -z "$MAX_WIN" ] || [ "$MAX_WIN" -eq 0 ] 2>/dev/null && MAX_WIN=200000
 
 # Actual context tokens in use (used % × window size)
-CTX_TOKS=$(python3 -c "print($PCT_RAW * $MAX_WIN / 100)" 2>/dev/null || echo 0)
+CTX_TOKS=$(python3 -c "print(int($PCT_RAW * $MAX_WIN / 100))" 2>/dev/null || echo 0)
 
 # 100K separator: cell boundary index (separator appears after this cell)
 SEP_CELL=$(python3 -c "print(int(100000 / $MAX_WIN * $BAR_WIDTH))" 2>/dev/null || echo 5)
@@ -404,6 +404,70 @@ if [ "$TOT_IN" -gt 0 ] || [ "$TOT_OUT" -gt 0 ]; then
   TOK_SEG=$(printf "⬇️ ${bold}${BLUE}${IN_FMT}${reset} ⬆️ ${bold}${MAGENTA}${OUT_FMT}${reset}")
 fi
 
+# ── Active tools (from transcript) ──────────────────────────────────────────
+TRANSCRIPT_PATH=$(echo "$input" | jq -r '.transcript_path // empty')
+TOOLS_SEG=""
+if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+  TOOLS_SEG=$(python3 -c "
+import json, sys
+
+try:
+    with open('$TRANSCRIPT_PATH') as f:
+        lines = [json.loads(l) for l in f if l.strip()]
+except:
+    sys.exit(0)
+
+uses = {}      # id -> name
+completed = set()
+
+for item in lines:
+    msg = item.get('message', {})
+    content = msg.get('content', [])
+    if not isinstance(content, list):
+        continue
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        if block.get('type') == 'tool_use':
+            uses[block['id']] = block.get('name', '?')
+        elif block.get('type') == 'tool_result':
+            completed.add(block.get('tool_use_id', ''))
+
+running = [name for tid, name in uses.items() if tid not in completed]
+done_recent = [uses[tid] for tid in list(reversed(list(uses.keys()))) if tid in completed][:5]
+
+parts = []
+for name in running:
+    parts.append(f'◐ {name}')
+
+counts = {}
+for name in done_recent:
+    counts[name] = counts.get(name, 0) + 1
+for name, n in counts.items():
+    parts.append(f'✓ {name}' + (f' ×{n}' if n > 1 else ''))
+
+if parts:
+    print('  '.join(parts))
+" 2>/dev/null)
+fi
+
+# ── Prompt cache ─────────────────────────────────────────────────────────────
+CACHE_CREATE=$(echo "$input" | jq -r '.context_window.current_usage.cache_creation_input_tokens // 0')
+CACHE_READ=$(echo "$input"   | jq -r '.context_window.current_usage.cache_read_input_tokens    // 0')
+CACHE_SEG=""
+if [ "${CACHE_CREATE:-0}" -gt 0 ] || [ "${CACHE_READ:-0}" -gt 0 ]; then
+  CACHE_SEG=$(python3 -c "
+create = int('${CACHE_CREATE:-0}')
+read   = int('${CACHE_READ:-0}')
+def fmt(n):
+    return f'{round(n/1000)}k' if n >= 1000 else str(n)
+total = create + read
+hit = round(read / total * 100) if total > 0 else 0
+parts = [f'read {fmt(read)}', f'created {fmt(create)}', f'hit {hit}%']
+print('💾 ' + '  ·  '.join(parts))
+" 2>/dev/null)
+fi
+
 # ── Separators ───────────────────────────────────────────────────────────────
 SEP=$(printf "${GREY} │ ${reset}")
 # Chevron-style separator used between model·effort and location on line 2
@@ -426,10 +490,15 @@ LINE3="${RATE_STR}"
 # Line 4 — 7d rate limit
 LINE4="${SD_SEG}"
 
-if [ -n "$LINE3" ] && [ -n "$LINE4" ]; then
-  printf "%b\n%b\n%b\n%b\n" "$LINE1" "$LINE2" "$LINE3" "$LINE4"
-elif [ -n "$LINE3" ]; then
-  printf "%b\n%b\n%b\n" "$LINE1" "$LINE2" "$LINE3"
-else
-  printf "%b\n%b\n" "$LINE1" "$LINE2"
-fi
+# Line 5 — active tools (only when present)
+LINE5="${TOOLS_SEG}"
+
+# Line 6 — prompt cache (only when present)
+LINE6="${CACHE_SEG}"
+
+# Build output — only emit lines that have content
+OUT=""
+for L in "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6"; do
+  [ -n "$L" ] && OUT="${OUT}${L}\n"
+done
+printf "%b" "$OUT"
