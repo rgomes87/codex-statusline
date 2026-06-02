@@ -151,29 +151,22 @@ A separate ANSI bash statusline for [Claude Code](https://claude.ai/code), using
 }
 ```
 
+### Preview
+
+```
+✓ Edit ×3  ✓ Read ×2
+❮■■■■■|□□□□□❯ 106k - 53%  🗜 1  ⬇️ 106k ⬆️ 39k
+Claude Sonnet 4.6 · high ∷ ~/project  🌿 main ✎2
+🟢 5h ▮▮▮▮▮▮▮▮▯▯ 83% ⏱️ 4h 40m @ 03:28
+🟡 7d ▮▮▮▮▮▮▯▯▯▯ 60% ⏱️ 1d 22h 50m @ 21:38 Thu
+📖 read 131k · ✍️ wrote 1k · 🎯 hit 99% · 🗒 327 · 24h 59m
+```
+
 ### Icon reference
 
 | Icon | Meaning |
 |------|---------|
-| **Line 1 — Context window** | |
-| `❮▓▓░░❯` | Context bar — gradient green→red as context fills |
-| `\|` | 100k token boundary marker inside bar |
-| `⬇️` | Total input tokens this session |
-| `⬆️` | Total output tokens this session |
-| **Line 2 — Session** | |
-| `∷` | Separator between model/effort and location |
-| `🌿` | Git branch name |
-| `⊕N` | Staged file count (green) |
-| `✎N` | Unstaged file count (orange) |
-| `↑N` | Commits ahead of remote |
-| `↓N` | Commits behind remote |
-| **Line 3 — 5-hour rate limit** | |
-| 🟢🟡🟠🔴⭕ | Remaining capacity: >75% · >50% · >25% · >0% · empty |
-| `▮▯` | Inverted bar — drains as allowance is consumed |
-| `⏱️` | Countdown to reset (`Xh Ym Zs @ HH:MM`) |
-| **Line 4 — 7-day rate limit** | |
-| _(same as line 3)_ | Reset label includes relative day (today/tomorrow/Thu) |
-| **Line 5 — Active tools** | |
+| **Line 1 — Active tools** | |
 | `◐` | Tool currently running (amber) |
 | `✓` | Recently completed tool (green) |
 | Blue name | File operation (Read, Write, Edit) |
@@ -182,16 +175,31 @@ A separate ANSI bash statusline for [Claude Code](https://claude.ai/code), using
 | Purple name | Agent / Task / Plan |
 | Magenta name | MCP tool |
 | `×N` | Tool called N times |
-| **Line 6 — Prompt cache** | |
-| `💾` | Prompt cache section |
-| `📖` | Tokens served from cache (cheap reads) |
-| `📝` | Tokens written to cache (new entries) |
+| **Line 2 — Context window** | |
+| `❮▓▓░░❯` | Context bar — gradient green→red as context fills |
+| `\|` | 100k token boundary marker inside bar |
+| `🗜 N` | Times context was auto-compacted this session (gold) |
+| `⬇️` | Total input tokens this session |
+| `⬆️` | Total output tokens this session |
+| **Line 3 — Session** | |
+| `∷` | Separator between model/effort and location |
+| `🌿` | Git branch name |
+| `⊕N` | Staged file count (green) |
+| `✎N` | Unstaged file count (orange) |
+| `↑N` | Commits ahead of remote |
+| `↓N` | Commits behind remote |
+| **Line 4 — 5-hour rate limit** | |
+| 🟢🟡🟠🔴⭕ | Remaining capacity: >75% · >50% · >25% · >0% · empty |
+| `▮▯` | Inverted bar — drains as allowance is consumed |
+| `⏱️` | Countdown to reset (`Xh Ym @ HH:MM`) |
+| **Line 5 — 7-day rate limit** | |
+| _(same as line 4)_ | Reset label includes relative day (today/tomorrow/Thu) |
+| **Line 6 — Cache + session stats** | |
+| `📖` | Tokens served from cache (reads — green) |
+| `✍️` | Tokens written to cache (writes — blue) |
 | `🎯` | Cache hit rate — green ≥80% · yellow ≥50% · red <50% |
-| **Line 7 — Session stats** | |
-| `🗒` | Session section |
-| _number_ | Assistant turns in this session |
-| `🗜` | Number of times context was auto-compacted |
-| _duration_ | Session age (e.g. `1h 23m`) |
+| `🗒 N` | Assistant turns in this session |
+| _duration_ | Session age (e.g. `24h 59m`) |
 
 ---
 
