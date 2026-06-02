@@ -404,9 +404,9 @@ elif [ "$AC_REM" -le 25 ]; then AC_COL=$(c 220)
 else                             AC_COL=$(c 82)
 fi
 if [ "$AC_REM" -le 0 ]; then
-  AC_SEG=$(printf "${AC_COL}⚡now${reset}")
+  AC_SEG=$(printf "$(c 51)⚡${reset}${AC_COL}now${reset}")
 else
-  AC_SEG=$(printf "${AC_COL}⚡${AC_REM}%%${reset}")
+  AC_SEG=$(printf "$(c 51)⚡${reset}${AC_COL}${AC_REM}%%${reset}")
 fi
 
 # ── Transcript analysis: tools, compact count, session stats ─────────────────
