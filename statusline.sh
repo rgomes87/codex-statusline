@@ -46,27 +46,27 @@ if [ "$_count" -gt 2 ]; then
 fi
 
 # Directory: warm pink/rose — visually distinct from branch
-CWD_SEG=$(printf "${bold}$(c 204)${SHORT_CWD}${reset}")
+CWD_SEG=$(printf "$(c 204)${SHORT_CWD}${reset}")
 
 # ── Git branch + status ──────────────────────────────────────────────────────
 GIT_BRANCH=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" branch --show-current 2>/dev/null)
 GIT_SEG=""
 if [ -n "$GIT_BRANCH" ]; then
-  GIT_SEG=$(printf "🌿 ${bold}$(c 117)${GIT_BRANCH}${reset}")
+  GIT_SEG=$(printf "🌿 $(c 117)${GIT_BRANCH}${reset}")
 
   # Staged vs unstaged (separate counts, not combined)
   STAGED=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
   UNSTAGED=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" diff --name-only 2>/dev/null | wc -l | tr -d ' ')
-  [ "${STAGED:-0}" -gt 0 ]   && GIT_SEG="${GIT_SEG} ${bold}$(c 82)⊕${STAGED}${reset}"
-  [ "${UNSTAGED:-0}" -gt 0 ] && GIT_SEG="${GIT_SEG} ${bold}$(c 208)✎${UNSTAGED}${reset}"
+  [ "${STAGED:-0}" -gt 0 ]   && GIT_SEG="${GIT_SEG} $(c 82)⊕${STAGED}${reset}"
+  [ "${UNSTAGED:-0}" -gt 0 ] && GIT_SEG="${GIT_SEG} $(c 208)✎${UNSTAGED}${reset}"
 
   # Ahead/behind remote
   UPSTREAM=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" rev-parse --abbrev-ref "@{u}" 2>/dev/null)
   if [ -n "$UPSTREAM" ]; then
     AHEAD=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" rev-list --count "@{u}..HEAD" 2>/dev/null)
     BEHIND=$(git --git-dir="$RAW_CWD/.git" --work-tree="$RAW_CWD" rev-list --count "HEAD..@{u}" 2>/dev/null)
-    [ "${AHEAD:-0}" -gt 0 ]  && GIT_SEG="${GIT_SEG} ${bold}$(c 82)↑${AHEAD}${reset}"
-    [ "${BEHIND:-0}" -gt 0 ] && GIT_SEG="${GIT_SEG} ${bold}$(c 196)↓${BEHIND}${reset}"
+    [ "${AHEAD:-0}" -gt 0 ]  && GIT_SEG="${GIT_SEG} $(c 82)↑${AHEAD}${reset}"
+    [ "${BEHIND:-0}" -gt 0 ] && GIT_SEG="${GIT_SEG} $(c 196)↓${BEHIND}${reset}"
   fi
 fi
 
@@ -91,9 +91,9 @@ case "$EFFORT" in
 esac
 
 if [ "$EFFORT" = "max" ]; then
-  EFFORT_LABEL="${bold}$(c 196)m${reset}${bold}$(c 226)a${reset}${bold}$(c 46)x${reset}"
+  EFFORT_LABEL="$(c 196)m${reset}$(c 226)a${reset}$(c 46)x${reset}"
 elif [ -n "$EFFORT_COL" ] && [ -n "$EFFORT" ]; then
-  EFFORT_LABEL="${bold}${EFFORT_COL}${EFFORT}${reset}"
+  EFFORT_LABEL="${EFFORT_COL}${EFFORT}${reset}"
 else
   EFFORT_LABEL=""
 fi
@@ -107,9 +107,9 @@ case "$MODEL" in
 esac
 
 if [ -n "$EFFORT" ]; then
-  MODEL_COLORED=$(printf "${bold}${MODEL_COL}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}")
+  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}${GREY} · ${reset}${EFFORT_LABEL}")
 else
-  MODEL_COLORED=$(printf "${bold}${MODEL_COL}${MODEL}${reset}")
+  MODEL_COLORED=$(printf "${MODEL_COL}${MODEL}${reset}")
 fi
 
 # ── Token reads (needed before context bar) ──────────────────────────────────
@@ -164,7 +164,7 @@ BAR_COLORED=""
 for i in $(seq 1 $BAR_WIDTH); do
   # Inject 100K separator before cell SEP_CELL+1 (i.e., after cell SEP_CELL)
   if [ "$SHOW_SEP" -eq 1 ] && [ "$i" -eq "$((SEP_CELL + 1))" ]; then
-    BAR_COLORED="${BAR_COLORED}${bold}${SEP_COL}|${reset}"
+    BAR_COLORED="${BAR_COLORED}${SEP_COL}|${reset}"
   fi
   if [ "$i" -le "$FILLED" ]; then
     case "$i" in
@@ -179,7 +179,7 @@ for i in $(seq 1 $BAR_WIDTH); do
       9)  COL=$(c 202) ;;
       10) COL=$(c 196) ;;
     esac
-    BAR_COLORED="${BAR_COLORED}${COL}${bold}■${reset}"
+    BAR_COLORED="${BAR_COLORED}${COL}■${reset}"
   else
     BAR_COLORED="${BAR_COLORED}${GREY}□${reset}"
   fi
@@ -201,7 +201,7 @@ case "$FILLED" in
   *)  PCT_COL=$(c 46)  ;;
 esac
 CTX_TOK_FMT=$(fmt_tok "$CTX_TOKS")
-PCT_COLORED=$(printf "${bold}${PCT_COL}${CTX_TOK_FMT} - %d%%${reset}" "$PCT")
+PCT_COLORED=$(printf "${PCT_COL}${CTX_TOK_FMT} - %d%%${reset}" "$PCT")
 
 # ── Rate limits ──────────────────────────────────────────────────────────────
 FIVE_H=$(echo "$input"  | jq -r '.rate_limits.five_hour.used_percentage  // empty')
@@ -277,7 +277,7 @@ if [ -n "$FIVE_H" ]; then
   else                             FH_SYM="⭕"
   fi
   FH_ICON="$FH_SYM"
-  FH_SEG=$(printf "${FH_ICON} ${bold}$(c 250)5h${reset} ${FH_BAR} ${bold}${FH_COL}${FH_INT}%%${reset}")
+  FH_SEG=$(printf "${FH_ICON} $(c 250)5h${reset} ${FH_BAR} ${FH_COL}${FH_INT}%%${reset}")
 fi
 
 # ── Reset countdowns ─────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ if diff > 0:
     if d > 0:
         print(f'{d}d {h}h {m}m {s}s')
     else:
-        print(f'   {h}h {m}m {s}s')
+        print(f'{h}h {m}m {s}s')
 " 2>/dev/null
 }
 
@@ -310,9 +310,9 @@ if [ -n "$FH_SEG" ]; then
     RESET_TIME=$(date -r "$FIVE_H_RESET" '+%H:%M' 2>/dev/null)
     if [ -n "$R" ]; then
       if [ -n "$RESET_TIME" ]; then
-        RATE_STR="${RATE_STR} ⏱️${bold}${MUTED_CYAN}${R}${reset} ${GREY}@ ${RESET_TIME}${reset}"
+        RATE_STR="${RATE_STR} ⏱️ ${MUTED_CYAN}${R}${reset} ${GREY}@ ${RESET_TIME}${reset}"
       else
-        RATE_STR="${RATE_STR} ⏱️${bold}${MUTED_CYAN}${R}${reset}"
+        RATE_STR="${RATE_STR} ⏱️ ${MUTED_CYAN}${R}${reset}"
       fi
     fi
   fi
@@ -368,7 +368,7 @@ if [ -n "$SEVEN_D" ]; then
   else                             SD_SYM="⭕"
   fi
   SD_ICON="$SD_SYM"
-  SD_SEG=$(printf "${SD_ICON} ${bold}$(c 250)7d${reset} ${SD_BAR} ${bold}${SD_COL}${SD_INT}%%${reset}")
+  SD_SEG=$(printf "${SD_ICON} $(c 250)7d${reset} ${SD_BAR} ${SD_COL}${SD_INT}%%${reset}")
   if [ -n "$SEVEN_D_RESET" ]; then
     R=$(fmt_reset "$SEVEN_D_RESET")
     RESET_TIME_7D=$(python3 -c "
@@ -387,9 +387,9 @@ print(datetime.datetime.fromtimestamp(ts).strftime('%H:%M') + ' ' + label)
 " 2>/dev/null)
     if [ -n "$R" ]; then
       if [ -n "$RESET_TIME_7D" ]; then
-        SD_SEG="${SD_SEG} ⏱️${bold}${MUTED_CYAN}${R}${reset} ${GREY}@ ${RESET_TIME_7D}${reset}"
+        SD_SEG="${SD_SEG} ⏱️ ${MUTED_CYAN}${R}${reset} ${GREY}@ ${RESET_TIME_7D}${reset}"
       else
-        SD_SEG="${SD_SEG} ⏱️${bold}${MUTED_CYAN}${R}${reset}"
+        SD_SEG="${SD_SEG} ⏱️ ${MUTED_CYAN}${R}${reset}"
       fi
     fi
   fi
@@ -401,13 +401,12 @@ if [ "$TOT_IN" -gt 0 ] || [ "$TOT_OUT" -gt 0 ]; then
   IN_FMT=$(fmt_tok "$TOT_IN")
   OUT_FMT=$(fmt_tok "$TOT_OUT")
   # ⬇ in / ⬆ out as directional icons to distinguish at a glance
-  TOK_SEG=$(printf "⬇️ ${bold}${BLUE}${IN_FMT}${reset} ⬆️ ${bold}${MAGENTA}${OUT_FMT}${reset}")
+  TOK_SEG=$(printf "⬇️ ${BLUE}${IN_FMT}${reset} ⬆️ ${MAGENTA}${OUT_FMT}${reset}")
 fi
 
 # ── Transcript analysis: tools, compact count, session stats ─────────────────
 TRANSCRIPT_PATH=$(echo "$input" | jq -r '.transcript_path // empty')
 TOOLS_SEG=""
-COMPACT_NUM=0
 STATS_SEG=""
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
   _TRES=$(python3 -c "
@@ -495,7 +494,8 @@ try:
             dur = f'{h}h {mi}m' if mi > 0 else f'{h}h'
         else:
             dur = f'{mi}m {sr}s' if mi > 0 else f'{sr}s'
-        stats_line = f'🗒 {c(75)}{B}{turns}{R}{D} turns{R}  ·  {c(73)}{B}{dur}{R}'
+        sep_d      = f'{D} · {R}'
+        stats_line = f'🗒  {c(75)}{turns}{R}{sep_d}{c(73)}{dur}{R}'
 
     print(compact_count)
     print(stats_line)
@@ -511,10 +511,9 @@ except Exception:
   TOOLS_SEG=$(printf "%s" "$_TRES" | sed -n '3p')
 fi
 
-# Build compact segment from count
 COMPACT_SEG=""
 if [ -n "$COMPACT_NUM" ] && [ "$COMPACT_NUM" -gt 0 ] 2>/dev/null; then
-  COMPACT_SEG=$(printf "${bold}${GOLD}♻ ${COMPACT_NUM}${reset}")
+  COMPACT_SEG=$(printf "🗜  $(c 214)${COMPACT_NUM}${reset}")
 fi
 
 # ── Prompt cache ─────────────────────────────────────────────────────────────
@@ -542,11 +541,11 @@ elif hit >= 50: hit_col = c(220)
 else:           hit_col = c(196)
 
 sep        = f'{D} · {R}'
-read_seg   = f'{c(82)}{B}read {fmt(read)}{R}'
-create_seg = f'{c(75)}{B}created {fmt(create)}{R}'
-hit_seg    = f'{D}hit {R}{hit_col}{B}{hit}%{R}'
+read_seg   = f'📖 {c(82)}read {fmt(read)}{R}'
+create_seg = f'✍️  {c(75)}wrote {fmt(create)}{R}'
+hit_seg    = f'🎯 {hit_col}hit {hit}%{R}'
 
-print('💾 ' + sep.join([read_seg, create_seg, hit_seg]))
+print(sep.join([read_seg, create_seg, hit_seg]))
 " 2>/dev/null)
 fi
 
@@ -556,34 +555,36 @@ SEP=$(printf "${GREY} │ ${reset}")
 SEP2=$(printf " $(c 238)∷${reset} ")
 
 # ── Assemble line bodies (no labels) ─────────────────────────────────────────
-# Line 1 — context bar + token counts + compact counter
-LINE1="${bold}${PCT_COL}❮${reset}${BAR_COLORED}${bold}${PCT_COL}❯${reset} ${PCT_COLORED}"
-[ -n "$TOK_SEG" ]     && LINE1="${LINE1}  ${TOK_SEG}"
-[ -n "$COMPACT_SEG" ] && LINE1="${LINE1}  ${COMPACT_SEG}"
+# Line 1 — active tools (only when present)
+LINE1="${TOOLS_SEG}"
 
-# Line 2 — model · effort  ⟫  directory  ⎇ branch
+# Line 2 — context bar · compact count · token counts
+LINE2="${PCT_COL}❮${reset}${BAR_COLORED}${PCT_COL}❯${reset} ${PCT_COLORED}"
+[ -n "$COMPACT_SEG" ] && LINE2="${LINE2}  ${COMPACT_SEG}"
+[ -n "$TOK_SEG" ]     && LINE2="${LINE2}  ${TOK_SEG}"
+
+# Line 3 — model · effort  ⟫  directory  ⎇ branch
 LOC_SEG="${CWD_SEG}"
 [ -n "$GIT_SEG" ] && LOC_SEG="${LOC_SEG}  ${GIT_SEG}"
-LINE2="${MODEL_COLORED}${SEP2}${LOC_SEG}"
+LINE3="${MODEL_COLORED}${SEP2}${LOC_SEG}"
 
-# Line 3 — 5h rate limit
-LINE3="${RATE_STR}"
+# Line 4 — 5h rate limit
+LINE4="${RATE_STR}"
 
-# Line 4 — 7d rate limit
-LINE4="${SD_SEG}"
+# Line 5 — 7d rate limit
+LINE5="${SD_SEG}"
 
-# Line 5 — active tools (only when present)
-LINE5="${TOOLS_SEG}"
-
-# Line 6 — prompt cache (only when present)
+# Line 6 — prompt cache + session stats
 LINE6="${CACHE_SEG}"
-
-# Line 7 — session stats (only when present)
-LINE7="${STATS_SEG}"
+if [ -n "$STATS_SEG" ] && [ -n "$LINE6" ]; then
+  LINE6="${LINE6}$(printf "${GREY} · ${reset}")${STATS_SEG}"
+elif [ -n "$STATS_SEG" ]; then
+  LINE6="${STATS_SEG}"
+fi
 
 # Build output — only emit lines that have content
 OUT=""
-for L in "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6" "$LINE7"; do
+for L in "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6"; do
   [ -n "$L" ] && OUT="${OUT}${L}\n"
 done
 printf "%b" "$OUT"

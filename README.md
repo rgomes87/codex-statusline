@@ -140,6 +140,61 @@ The renderer is read-only. It does not write session data, modify Codex files, o
 
 ---
 
+## Claude Code statusline (`statusline.sh`)
+
+A separate ANSI bash statusline for [Claude Code](https://claude.ai/code), using the native `statusLine.command` hook. Add to `~/.claude/settings.json`:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "bash /path/to/statusline.sh"
+}
+```
+
+### Icon reference
+
+| Icon | Meaning |
+|------|---------|
+| **Line 1 — Context window** | |
+| `❮▓▓░░❯` | Context bar — gradient green→red as context fills |
+| `\|` | 100k token boundary marker inside bar |
+| `⬇️` | Total input tokens this session |
+| `⬆️` | Total output tokens this session |
+| **Line 2 — Session** | |
+| `∷` | Separator between model/effort and location |
+| `🌿` | Git branch name |
+| `⊕N` | Staged file count (green) |
+| `✎N` | Unstaged file count (orange) |
+| `↑N` | Commits ahead of remote |
+| `↓N` | Commits behind remote |
+| **Line 3 — 5-hour rate limit** | |
+| 🟢🟡🟠🔴⭕ | Remaining capacity: >75% · >50% · >25% · >0% · empty |
+| `▮▯` | Inverted bar — drains as allowance is consumed |
+| `⏱️` | Countdown to reset (`Xh Ym Zs @ HH:MM`) |
+| **Line 4 — 7-day rate limit** | |
+| _(same as line 3)_ | Reset label includes relative day (today/tomorrow/Thu) |
+| **Line 5 — Active tools** | |
+| `◐` | Tool currently running (amber) |
+| `✓` | Recently completed tool (green) |
+| Blue name | File operation (Read, Write, Edit) |
+| Orange name | Shell (Bash) |
+| Cyan name | Web (WebFetch, WebSearch) |
+| Purple name | Agent / Task / Plan |
+| Magenta name | MCP tool |
+| `×N` | Tool called N times |
+| **Line 6 — Prompt cache** | |
+| `💾` | Prompt cache section |
+| `📖` | Tokens served from cache (cheap reads) |
+| `📝` | Tokens written to cache (new entries) |
+| `🎯` | Cache hit rate — green ≥80% · yellow ≥50% · red <50% |
+| **Line 7 — Session stats** | |
+| `🗒` | Session section |
+| _number_ | Assistant turns in this session |
+| `🗜` | Number of times context was auto-compacted |
+| _duration_ | Session age (e.g. `1h 23m`) |
+
+---
+
 ## License
 
 MIT
