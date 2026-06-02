@@ -155,51 +155,115 @@ A separate ANSI bash statusline for [Claude Code](https://claude.ai/code), using
 
 ```
 ✓ Edit ×3  ✓ Read ×2
-❮■■■■■|□□□□□❯ 106k - 53%  🗜 1  ⬇️ 106k ⬆️ 39k
+❮■■■■■|□□□□□❯ 106k - 53%  ⚡38%  🗜 1
 Claude Sonnet 4.6 · high ∷ ~/project  🌿 main ✎2
 🟢 5h ▮▮▮▮▮▮▮▮▯▯ 83% ⏱️ 4h 40m @ 03:28
 🟡 7d ▮▮▮▮▮▮▯▯▯▯ 60% ⏱️ 1d 22h 50m @ 21:38 Thu
 📖 read 131k · ✍️ wrote 1k · 🎯 hit 99% · 🗒 327 · 24h 59m
 ```
 
-### Icon reference
+---
 
-| Icon | Meaning |
-|------|---------|
-| **Line 1 — Active tools** | |
-| `◐` | Tool currently running (amber) |
-| `✓` | Recently completed tool (green) |
-| Blue name | File operation (Read, Write, Edit) |
-| Orange name | Shell (Bash) |
-| Cyan name | Web (WebFetch, WebSearch) |
-| Purple name | Agent / Task / Plan |
-| Magenta name | MCP tool |
-| `×N` | Tool called N times |
-| **Line 2 — Context window** | |
-| `❮▓▓░░❯` | Context bar — gradient green→red as context fills |
-| `\|` | 100k token boundary marker inside bar |
-| `🗜 N` | Times context was auto-compacted this session (gold) |
-| `⬇️` | Total input tokens this session |
-| `⬆️` | Total output tokens this session |
-| **Line 3 — Session** | |
-| `∷` | Separator between model/effort and location |
-| `🌿` | Git branch name |
-| `⊕N` | Staged file count (green) |
-| `✎N` | Unstaged file count (orange) |
-| `↑N` | Commits ahead of remote |
-| `↓N` | Commits behind remote |
-| **Line 4 — 5-hour rate limit** | |
-| 🟢🟡🟠🔴⭕ | Remaining capacity: >75% · >50% · >25% · >0% · empty |
-| `▮▯` | Inverted bar — drains as allowance is consumed |
-| `⏱️` | Countdown to reset (`Xh Ym @ HH:MM`) |
-| **Line 5 — 7-day rate limit** | |
-| _(same as line 4)_ | Reset label includes relative day (today/tomorrow/Thu) |
-| **Line 6 — Cache + session stats** | |
-| `📖` | Tokens served from cache (reads — green) |
-| `✍️` | Tokens written to cache (writes — blue) |
-| `🎯` | Cache hit rate — green ≥80% · yellow ≥50% · red <50% |
-| `🗒 N` | Assistant turns in this session |
-| _duration_ | Session age (e.g. `24h 59m`) |
+### Line-by-line guide
+
+#### Line 1 — Active tools
+Shows what Claude is doing right now and what it just did. Updates live as tools run.
+
+```
+✓ Edit ×3  ◐ Bash  ✓ Read
+```
+
+| Element | Meaning |
+|---------|---------|
+| `◐ ToolName` | Tool currently executing — shown in amber. Disappears once done. |
+| `✓ ToolName` | Tool completed recently — shown in green. Up to 5 most recent. |
+| `×N` | Tool was called N times in the recent batch. |
+| **Name colours** | Blue = file ops (Read/Write/Edit) · Orange = Bash · Cyan = web · Purple = Agent/Task/Plan · Magenta = MCP |
+
+This line is absent when no tools have run yet in the session.
+
+---
+
+#### Line 2 — Context window
+Shows how much of the 200k context window is in use, plus two critical thresholds.
+
+```
+❮■■■■■|□□□□□❯ 106k - 53%  ⚡38%  🗜 1
+```
+
+| Element | Meaning |
+|---------|---------|
+| `❮■■░░❯` | 10-cell bar — filled cells show context used. Colour gradient: green (empty) → yellow → orange → red (full). |
+| `\|` | 100k token marker inside the bar. Turns amber once you've passed it — a useful quality warning, since context beyond 100k gets harder for the model to reason over. |
+| `106k - 53%` | Approximate tokens currently in the context window and the percentage of the 200k limit used. |
+| `⚡38%` | **Headroom before autocompact fires.** Claude Code is configured to auto-compact at 91% — this shows how many percentage points remain. Green when comfortable, yellow below 25%, red below 10%. Goes to `⚡now` when at or past threshold. |
+| `🗜 N` | **Times context was compacted this session** (gold). Each compaction summarises earlier conversation to free up space. Higher numbers mean a long or tool-heavy session. Hidden when 0. |
+
+---
+
+#### Line 3 — Model, effort & location
+Identifies the active model configuration and where you're working.
+
+```
+Claude Sonnet 4.6 · high ∷ ~/project  🌿 main ⊕2 ✎1 ↑3
+```
+
+| Element | Meaning |
+|---------|---------|
+| Model name | Active Claude model — orange for Sonnet, green for Haiku, red for Opus. |
+| `· effort` | Current `/effort` level — yellow (low) · green (medium) · periwinkle (high) · purple (xhigh) · rainbow (max). |
+| `∷` | Separator between session config and filesystem location. |
+| `~/project` | Working directory, truncated to the last 2 path components. |
+| `🌿 branch` | Active git branch. Absent when the directory has no git repo. |
+| `⊕N` | N staged files ready to commit (green). |
+| `✎N` | N unstaged changes not yet staged (orange). |
+| `↑N` | N commits ahead of the remote — unpushed work. |
+| `↓N` | N commits behind the remote — incoming changes not yet pulled. |
+
+---
+
+#### Line 4 — 5-hour rate limit
+Shows how much of your 5-hour usage allowance remains, and when it resets.
+
+```
+🟢 5h ▮▮▮▮▮▮▮▮▯▯ 83% ⏱️ 4h 40m @ 03:28
+```
+
+| Element | Meaning |
+|---------|---------|
+| 🟢🟡🟠🔴⭕ | Traffic light for remaining capacity: >75% · >50% · >25% · >0% · exhausted. |
+| `▮▯` bar | 10-cell inverted bar — **starts full and drains** as you consume allowance. Colour shifts green → red as capacity falls. |
+| `N%` | Percentage of the 5-hour window still remaining. |
+| `⏱️ Xh Ym` | Countdown until the window resets. Shows seconds when under 1 hour. |
+| `@ HH:MM` | Wall-clock time of the reset in your local timezone. |
+
+---
+
+#### Line 5 — 7-day rate limit
+Same format as line 4 but for the rolling 7-day allowance, which resets less frequently.
+
+```
+🟡 7d ▮▮▮▮▮▮▯▯▯▯ 60% ⏱️ 1d 22h 50m @ 21:38 Thu
+```
+
+The reset label is relative: shows **today**, **tomorrow**, or an abbreviated weekday (Mon–Sun) for resets further out.
+
+---
+
+#### Line 6 — Prompt cache & session stats
+Summarises how efficiently the session is using the prompt cache, and how long it has been running.
+
+```
+📖 read 131k · ✍️ wrote 1k · 🎯 hit 99% · 🗒 346 · 25h 6m
+```
+
+| Element | Meaning |
+|---------|---------|
+| `📖 read N` | Tokens **served from cache** this session (green). Cache reads are ~90% cheaper than fresh input — high values mean Claude is efficiently reusing prior context. |
+| `✍️ wrote N` | Tokens **written into cache** this session (blue). New cache entries created as context grows. |
+| `🎯 hit N%` | **Cache hit rate** — the proportion of input tokens that came from cache rather than being reprocessed. Green ≥80% · yellow ≥50% · red <50%. A high hit rate means the session is economical and fast. |
+| `🗒 N` | **Number of assistant turns** in this session, parsed from the transcript. Gives a sense of session depth. |
+| _duration_ | **Session age** — time elapsed since the first message in the current transcript (e.g. `25h 6m`). |
 
 ---
 

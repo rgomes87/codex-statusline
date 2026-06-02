@@ -395,13 +395,18 @@ print(datetime.datetime.fromtimestamp(ts).strftime('%H:%M') + ' ' + label)
   fi
 fi
 
-# ── Token counts ─────────────────────────────────────────────────────────────
-TOK_SEG=""
-if [ "$TOT_IN" -gt 0 ] || [ "$TOT_OUT" -gt 0 ]; then
-  IN_FMT=$(fmt_tok "$TOT_IN")
-  OUT_FMT=$(fmt_tok "$TOT_OUT")
-  # ⬇ in / ⬆ out as directional icons to distinguish at a glance
-  TOK_SEG=$(printf "⬇️ ${BLUE}${IN_FMT}${reset} ⬆️ ${MAGENTA}${OUT_FMT}${reset}")
+# ── Autocompact marker ────────────────────────────────────────────────────────
+AC_THRESH="${CLAUDE_AUTOCOMPACT_PCT_OVERRIDE:-91}"
+AC_REM=$((AC_THRESH - PCT))
+if   [ "$AC_REM" -le 0  ]; then AC_COL=$(c 196)
+elif [ "$AC_REM" -le 10 ]; then AC_COL=$(c 196)
+elif [ "$AC_REM" -le 25 ]; then AC_COL=$(c 220)
+else                             AC_COL=$(c 82)
+fi
+if [ "$AC_REM" -le 0 ]; then
+  AC_SEG=$(printf "${AC_COL}⚡now${reset}")
+else
+  AC_SEG=$(printf "${AC_COL}⚡${AC_REM}%%${reset}")
 fi
 
 # ── Transcript analysis: tools, compact count, session stats ─────────────────
@@ -558,10 +563,10 @@ SEP2=$(printf " $(c 238)∷${reset} ")
 # Line 1 — active tools (only when present)
 LINE1="${TOOLS_SEG}"
 
-# Line 2 — context bar · compact count · token counts
+# Line 2 — context bar · compact count · autocompact marker
 LINE2="${PCT_COL}❮${reset}${BAR_COLORED}${PCT_COL}❯${reset} ${PCT_COLORED}"
+LINE2="${LINE2}  ${AC_SEG}"
 [ -n "$COMPACT_SEG" ] && LINE2="${LINE2}  ${COMPACT_SEG}"
-[ -n "$TOK_SEG" ]     && LINE2="${LINE2}  ${TOK_SEG}"
 
 # Line 3 — model · effort  ⟫  directory  ⎇ branch
 LOC_SEG="${CWD_SEG}"
